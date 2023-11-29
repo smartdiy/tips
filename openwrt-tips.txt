@@ -1,0 +1,33 @@
+https://unix.stackexchange.com/questions/539477/how-to-get-all-the-configuration-options-with-the-uci-command-in-openwrt
+
+
+
+If you want to create a script to setup OpenWRT using all current settings on the device.
+
+#!/bin/sh
+# Create OpenWRT setup script
+script="/tmp/uci_setup_script.sh"
+echo "#!/bin/sh" > "$script"
+echo "uci -q batch << EOI" >> "$script"
+for section in $(uci show | awk -F. '{print $1}' | sort -u); do
+uci show "$section" | awk -F. '{print "set "$0}' >> "$script"
+echo "commit $section" >> "$script"
+done
+echo "EOI" >> "$script"
+chmod 755 "$script"
+
+If you are using image builder for custom firmware, then create a file for the files/etc/uci-defaults folder in the image builder directory.
+
+#!/bin/sh
+# Create OpenWRT uci-defaults file for image builder
+# copy generated file to 'files/etc/uci-defaults/' folder in your image builder directory
+script="/tmp/99-custom"
+echo "#!/bin/sh" > "$script"
+echo "uci -q batch << EOI" >> "$script"
+for section in $(uci show | awk -F. '{print $1}' | sort -u); do
+uci show "$section" | awk -F. '{print "set "$0}' >> "$script"
+echo "commit $section" >> "$script"
+echo "EOI" >> "$script"
+chmod 755 "$script"
+done
+
