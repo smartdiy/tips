@@ -31,3 +31,10 @@ echo "EOI" >> "$script"
 chmod 755 "$script"
 done
 
+
+
+# Scan wifi channels and find best available channels, after run the following command and see which channels are available and less neighbours
+iwinfo phy1-ap0 scan
+
+# find wifi info
+iw list
