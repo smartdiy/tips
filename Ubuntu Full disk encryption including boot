@@ -1,0 +1,4 @@
+https://help.ubuntu.com/community/Full_Disk_Encryption_Howto_2019
+
+zero out disk before sgdisk --zap-all $DEV if disk is encrypted before, it will take time, it depends on the size of disk
+dd if=/dev/zero of=/dev/sda status=progress
