@@ -2,3 +2,20 @@ https://help.ubuntu.com/community/Full_Disk_Encryption_Howto_2019
 
 zero out disk before sgdisk --zap-all $DEV if disk is encrypted before, it will take time, it depends on the size of disk
 dd if=/dev/zero of=/dev/sda status=progress
+
+root@ubuntu:~# sgdisk --print $DEV
+Disk /dev/sda: 236978176 sectors, 113.0 GiB
+Model: APPLE SSD TS128E
+Sector size (logical/physical): 512/4096 bytes
+Disk identifier (GUID): 4C934D15-61D4-4269-B54F-48B5C87EAD01
+Partition table holds up to 128 entries
+Main partition table begins at sector 2 and ends at sector 33
+First usable sector is 34, last usable sector is 236978142
+Partitions will be aligned on 2048-sector boundaries
+Total free space is 2014 sectors (1007.0 KiB)
+
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1            2048         2099199   1024.0 MiB  8301  /boot
+   2         2099200         2508799   200.0 MiB   EF02  GRUB
+   3         2508800         4605951   1024.0 MiB  EF00  EFI-SP
+   4         4605952       236978142   110.8 GiB   8301  rootfs
