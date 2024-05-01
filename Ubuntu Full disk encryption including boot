@@ -38,3 +38,6 @@ sudo cryptsetup luksDump /dev/whatever
 
 sudo cryptsetup luksConvertKey /dev/whatever --pbkdf argon2id
 
+How to install Debian 12 with full disk (boot too) luks2 encryption grub2, lvm UEFI?
+https://unix.stackexchange.com/questions/753886/how-to-install-debian-12-with-full-disk-boot-too-luks2-encryption-grub2-lvm-u
+
