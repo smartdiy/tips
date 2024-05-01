@@ -1,0 +1,203 @@
+
+Disclaimers
+
+    Back up your data!
+    Having another computer helps!
+    This takes some time, even if everything works correctly on the first try!
+    You have to unlock the encrypted drive TWICE on boot.
+    I have only tried the UEFI mode install.
+
+Guide
+
+So, the solution to this problem is to use a live USB, create the partitions, install Debian, skipping grub, boot with the live USB, chroot into the new install and compile and install the patched grub.
+Because this is so damn tedious, I have made a script for it.
+I used the name gil_install.sh:
+
+#! /usr/bin/env bash
+
+script_rel_path="/home/tempuser"
+script_full_path="$script_rel_path/"$(basename "$0")
+
+# choose which part of the script should run based on cli argument
+# no argument case
+if [ -z "$1" ] ; then
+
+    # assuming installed debian 12 system is mounted to /mnt
+    mkdir "/mnt$script_rel_path"
+    cp "$0" "/mnt$script_full_path"
+
+    # mount essentials for chroot
+    # https://wiki.debian.org/chroot
+    mount --bind /dev /mnt/dev/
+    mount --bind /dev/pts /mnt/dev/pts
+    mount --bind /proc /mnt/proc
+    mount --bind /sys  /mnt/sys
+    mount --bind /run  /mnt/run
+
+    # chroot and start the next part of this script from within the chroot
+    # couldn't get this part to work right
+    #chroot /mnt /bin/bash -i "$script_full_path 1"
+    
+    echo "After chroot, enter command: cd $script_rel_path; bash $script_full_path 1"
+    chroot /mnt
+fi
+
+if [ "$1" == 1 ] ; then
+
+    echo "Installing build packages"
+    apt install -y gnulib libdevmapper-dev libfreetype-dev gettext autogen git bison help2man texinfo efibootmgr libisoburn1 libisoburn-dev mtools pkg-config m4 libtool automake autoconf flex fuse3 libfuse3-dev gawk
+
+    # mawk gives make error, so using gawk
+    mv /usr/bin/mawk /usr/bin/mawk_bu
+    ln -s /usr/bin/gawk /usr/bin/mawk
+
+    # git clone needed repos
+    git clone https://git.savannah.gnu.org/git/grub.git
+    cd grub
+    git clone https://git.savannah.nongnu.org/git/grub-extras.git
+    git clone https://aur.archlinux.org/grub-improved-luks2-git.git
+    git clone https://git.savannah.gnu.org/git/gnulib.git
+
+    cp "$0" "./"$(basename "$0")
+
+    /bin/bash -i $(basename "$0") 2
+fi
+
+if [ "$1" == 2 ] ; then
+
+    echo "Compiling grub"
+
+    # This part is copied from grub-improved-luks2-git/PKGBUILD
+    # It patches grub and compiles and installes it
+
+    patch -Np1 -i ./grub-improved-luks2-git/add-GRUB_COLOR_variables.patch
+
+    # Patch grub-mkconfig to detect Arch Linux initramfs images.
+    patch -Np1 -i ./grub-improved-luks2-git/detect-archlinux-initramfs.patch
+
+    # argon2
+    patch -Np1 -i ./grub-improved-luks2-git/argon_1.patch
+    patch -Np1 -i ./grub-improved-luks2-git/argon_2.patch
+    patch -Np1 -i ./grub-improved-luks2-git/argon_3.patch
+    patch -Np1 -i ./grub-improved-luks2-git/argon_4.patch
+    patch -Np1 -i ./grub-improved-luks2-git/argon_5.patch
+
+    # make grub-install work with luks2
+    patch -Np1 -i ./grub-improved-luks2-git/grub-install_luks2.patch
+
+    # Fix DejaVuSans.ttf location so that grub-mkfont can create *.pf2 files for starfield theme.
+    sed 's|/usr/share/fonts/dejavu|/usr/share/fonts/dejavu /usr/share/fonts/TTF|g' -i "configure.ac"
+
+    # Modify grub-mkconfig behaviour to silence warnings FS#36275
+    sed 's| ro | rw |g' -i "util/grub.d/10_linux.in"
+
+    # Modify grub-mkconfig behaviour so automatically generated entries read 'Arch Linux' FS#33393
+    sed 's|GNU/Linux|Linux|' -i "util/grub.d/10_linux.in"
+
+    # Pull in latest language files
+    #[ ! -z "$GRUB_ENABLE_NLS" ] && ./linguas.sh
+
+    # Remove lua module from grub-extras as it is incompatible with changes to grub_file_open
+    # http://git.savannah.gnu.org/cgit/grub.git/commit/?id=ca0a4f689a02c2c5a5e385f874aaaa38e151564e
+    rm -rf ./grub-extras/lua
+
+    export GRUB_CONTRIB=./grub-extras
+    export GNULIB_SRCDIR=./gnulib
+    CFLAGS=${CFLAGS/-fno-plt}
+
+    ./bootstrap
+    mkdir ./build_x86_64-efi
+    cd ./build_x86_64-efi
+    ../configure --with-platform=efi --target=x86_64 --prefix="/usr" --sbindir="/usr/bin" --sysconfdir="/etc" --enable-boot-time --enable-cache-stats --enable-device-mapper --enable-grub-mkfont --enable-grub-mount --enable-mm-debug --disable-silent-rules --disable-werror  CPPFLAGS="$CPPFLAGS -O2"
+    make
+
+    cd ..
+    # now we should be in /home/tempuser/grub (on the mounted filesystem)
+    /bin/bash -i $(basename "$0") 3
+fi
+
+if [ "$1" == 3 ] ; then
+
+    echo "Installing grub"
+#    exit
+
+    cd ./build_x86_64-efi
+    make DESTDIR=/ bashcompletiondir=/usr/share/bash-completion/completions install
+    install -D -m0644 ../grub-improved-luks2-git/grub.default /etc/default/grub
+
+fi
+
+Once you have the live USB running, open the encrypted volume (change this!)
+
+sudo cryptsetup luksOpen /dev/nvme0n1p2 crypt
+
+Mount it to /mnt (change partition name!)
+
+sudo mount /dev/mapper/vg1-debian /mnt
+
+Mount the efi partition to /mnt/boot/efi (change partition name!)
+
+sudo mkdir /mnt/boot/efi
+sudo mount /dev/nvme0n1p1 /mnt/boot/efi
+
+Opt: Make a backup of the Debian grub config
+(or to use this one comment out the appropriate line in my script)
+(The one in the patch is for Arch, but works.)
+(Maybe the base Debian version is better, but I haven't tried that.)
+
+sudo cp /etc/default/grub /etc/default/grub_bu
+
+Download my script and start it:
+
+sudo bash gil_install.sh
+
+NOTE that after entering chroot, you will have to copy and execute a command manually.
+(It is in the script. / Printed out to the terminal.)
+After that, the script should run, make and install the patched grub.
+You may continue the script from various points using CLI arguments.
+(See inside script.)
+NOTE that the script copies itself across multiple directories, so be careful which one you edit or execute.
+
+See: https://wiki.archlinux.org/title/GRUB#LUKS2
+Inside chroot:
+Enable cryptodisk in grub
+(Uncomment GRUB_ENABLE_CRYPTODISK=y line)
+(Also change Arch to Debian...)
+
+nano /etc/default/grub
+
+Use the grub-mkconfig tool to generate /boot/grub/grub.cfg:
+
+grub-mkconfig -o /boot/grub/grub.cfg
+
+Install grub to efi partition
+
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+
+Create /boot/grub/grub-pre.cfg
+
+nano /boot/grub/grub-pre.cfg
+
+set crypto_uuid=3b411d89-xxxx-xxxx-xxxx-xxxxxxxxxxxx  
+cryptomount -u $crypto_uuid
+set root=lvm/vg1-debian
+set prefix=($root)/boot/grub
+insmod normal
+normal
+
+Make EFI image:
+
+grub-mkimage -p /boot/grub -O x86_64-efi -c /boot/grub/grub-pre.cfg -o /tmp/grubx64.efi luks2 part_gpt cryptodisk gcry_rijndael argon2 gcry_sha256 ext2 lvm
+
+Copy to ESP:
+
+install -v /tmp/grubx64.efi /boot/efi/EFI/GRUB/grubx64.efi
+
+Add EFI entry:
+
+sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L "debian" -l "\EFI\GRUB\grubx64.efi"
+
+After all this and some efibootmgr 'magic' I could boot into my brand new Debian 12 installation.
+Hope this helps.
+I probably won't be around to maintain this, sorry.
+(I have wasted too much time on it as it is.)
