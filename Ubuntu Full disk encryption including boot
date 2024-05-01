@@ -19,3 +19,22 @@ Number  Start (sector)    End (sector)  Size       Code  Name
    2         2099200         2508799   200.0 MiB   EF02  GRUB
    3         2508800         4605951   1024.0 MiB  EF00  EFI-SP
    4         4605952       236978142   110.8 GiB   8301  rootfs
+
+Convert luks1 to luks2
+https://mjg59.dreamwidth.org/66429.html
+lsblk
+
+sudo cryptsetup luksClose
+
+sudo cryptsetup luksHeaderBackup /dev/whatever --header-backup-file /tmp/luksheader
+
+sudo cryptsetup luksHeaderRestore /dev/whatever --header-backup-file luksheader
+
+sudo cryptsetup luksDump /dev/whatever
+
+sudo cryptsetup convert /dev/whatever --type luks2
+
+sudo cryptsetup luksDump /dev/whatever
+
+sudo cryptsetup luksConvertKey /dev/whatever --pbkdf argon2id
+
