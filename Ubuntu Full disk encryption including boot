@@ -1,5 +1,11 @@
 https://help.ubuntu.com/community/Full_Disk_Encryption_Howto_2019
 
+How to Dual-Boot Ubuntu (20.04 - 23.10) and Windows (10 or 11) with Encryption
+https://www.mikekasberg.com/blog/2020/04/08/dual-boot-ubuntu-and-windows-with-encryption.html
+
+How to install Debian 12 with full disk (boot too) luks2 encryption grub2, lvm UEFI?
+https://unix.stackexchange.com/questions/753886/how-to-install-debian-12-with-full-disk-boot-too-luks2-encryption-grub2-lvm-u
+
 zero out disk before sgdisk --zap-all $DEV if disk is encrypted before, it will take time, it depends on the size of disk
 dd if=/dev/zero of=/dev/sda status=progress
 
@@ -38,6 +44,5 @@ sudo cryptsetup luksDump /dev/whatever
 
 sudo cryptsetup luksConvertKey /dev/whatever --pbkdf argon2id
 
-How to install Debian 12 with full disk (boot too) luks2 encryption grub2, lvm UEFI?
-https://unix.stackexchange.com/questions/753886/how-to-install-debian-12-with-full-disk-boot-too-luks2-encryption-grub2-lvm-u
+
 
