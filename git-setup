@@ -1,0 +1,113 @@
+Verified on debian 12 with nginx, git, gitweb, fcgiwrap
+
+ref: 
+https://miami-nice.co.uk/how-to-setup-your-own-git-repo-with-http-access-debian/#
+https://apuntesderootblog.wordpress.com/2015/06/01/how-to-run-gitweb-and-git-http-backend-with-nginx-in-fedora/
+
+/var/git
+
+groupadd git
+usermod -a -G git www-data
+
+chown :git /var/git
+
+chmod 2775 /var/git
+
+cd /var/git
+mkdir ${repo-name}.git
+cd ${repo-name}.git
+git init --bare --shared=group
+
+git config --file config http.receivepack true
+cd hooks
+mv post-update.sample post-update
+
+# setup passwd using apache tool, apache2-utils
+apt install apache2-utils
+htpasswd -m -c /etc/nginx/git-internal.htpasswd developer-username
+chmod 640 /etc/nginx/git-internal.htpasswd
+chown :www-data /etc/nginx/git-internal.htpasswd
+
+# use openssl
+echo -n "test:" >> /etc/nginx/git-internal.htpasswd
+openssl passwd -apr1 >> /etc/nginx/git-internal.htpasswd
+
+# configuration of nginx
+#  /etc/nginx/sites-enabled/default
+
+server {
+  listen 80;
+  #replace "example.com" below with your domain (or subdomain)
+  #server_name example.com;
+
+    # static repo files for cloning over https
+    location ~ ^.*\.git/objects/([0-9a-f]+/[0-9a-f]+|pack/pack-[0-9a-f]+.(pack|idx))$ {
+        root /var/git/;
+    }
+
+    # requests that need to go to git-http-backend
+    location ~ ^.*\.git/(HEAD|info/refs|objects/info/.*|git-(upload|receive)-pack)$ {
+        root /var/git;
+        fastcgi_pass unix:/var/run/fcgiwrap.socket;
+        fastcgi_param SCRIPT_FILENAME   /usr/lib/git-core/git-http-backend;
+        fastcgi_param PATH_INFO         $uri;
+        fastcgi_param GIT_PROJECT_ROOT  /var/git;
+        fastcgi_param GIT_HTTP_EXPORT_ALL "";
+        fastcgi_param REMOTE_USER $remote_user;
+        include fastcgi_params;
+    }
+
+  location /index.cgi {
+    try_files $uri $uri/ =404;
+    #auth_basic "Restricted Content";
+    #auth_basic_user_file /etc/nginx/git-internal.htpasswd;
+    #root /var/git/;
+    root /usr/share/gitweb/;
+    include fastcgi_params;
+    gzip off;
+    fastcgi_param SCRIPT_NAME $uri;
+    fastcgi_param GITWEB_CONFIG /etc/gitweb.conf;
+    fastcgi_param GIT_PROJECT_ROOT    /var/git;
+    fastcgi_pass  unix:/var/run/fcgiwrap.socket;
+  }
+
+  location / {
+    #root /usr/share/gitweb/;
+    root /usr/share/gitweb/;
+    index index.cgi;
+  }
+}
+
+# /etc/gitweb.conf
+
+# path to git projects (<project>.git)
+#$projectroot = "/var/lib/git";
+$projectroot = "/var/git";
+
+# directory to use for temp files
+$git_temp = "/tmp";
+
+# target of the home link on top of all pages
+#$home_link = $my_uri || "/";
+
+# html text to include at home page
+#$home_text = "indextext.html";
+
+# file with project list; by default, simply scan the projectroot dir.
+$projects_list = $projectroot;
+
+# stylesheet to use
+@stylesheets = ("static/gitweb.css");
+
+# javascript code for gitweb
+$javascript = "static/gitweb.js";
+
+# logo to use
+#$logo = "static/git-logo.png";
+
+# the 'favicon'
+#$favicon = "static/git-favicon.png";
+
+# git-diff-tree(1) options to use for generated patches
+#@diff_opts = ("-M");
+@diff_opts = ();
