@@ -38,3 +38,8 @@ iwinfo phy1-ap0 scan
 
 # find wifi info
 iw list
+
+# restart interface if it's down
+for i in a b c; do
+  ping -I $i -c 3 8.8.8.8 &>/dev/null || { ifdown $i; ifup $i; }
+done
